@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gerenciamento Admin - Gran Fênix (Refatorado)</title>
+
+    <script src="https://unpkg.com/vue@3"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+
+    <style>
+    /* IMPORTAÇÃO DE FONTES */
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+    /* VARIÁVEIS DE TEMA */
+    :root {
+        --primary-color: #007bff;
+        --secondary-color: #6c757d;
+        --success-color: #28a745;
+        --danger-color: #dc3545;
+        --bg-light: #f8f9fa;
+        --text-dark: #343a40;
+        --card-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05);
+        --border-radius: 0.5rem;
+        --accent-light: #e9ecef;
+        --login-bg: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    }
+
+    /* ESTILOS BASE E LAYOUT */
+    body { 
+        font-family: 'Roboto', sans-serif; 
+        background-color: var(--bg-light); 
+        color: var(--text-dark); 
+        margin: 0; 
+        padding: 0;
+        line-height: 1.6;
+    }
+
+    #app { 
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .login-container {
+        flex-grow: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: var(--login-bg);
+        padding: 20px;
+    }
+
+    .admin-container {
+        max-width: 1300px; 
+        margin: 40px auto; 
+        padding: 30px; 
+        background: #fff; 
+        border-radius: var(--border-radius); 
+        box-shadow: var(--card-shadow); 
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    h1 { color: var(--primary-color); font-size: 2.4em; font-weight: 700; margin-bottom: 5px; }
+    h2 { 
+        color: var(--text-dark); 
+        border-bottom: 1px solid var(--accent-light); 
+        padding-bottom: 15px; 
+        margin-top: 40px; 
+        margin-bottom: 25px;
+        font-size: 1.8em; 
+        font-weight: 500; 
+    }
+    
+    .header { 
+        display: flex; 
+        flex-direction: column; 
+        margin-bottom: 30px; 
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--accent-light);
+    }
+    
+    .header-actions {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    /* Novo estilo para o container de Ações e Busca */
+    .product-actions-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 25px;
+        flex-wrap: wrap; 
+        align-items: center;
+    }
+    .product-actions-bar input {
+        flex-grow: 1; 
+        padding: 10px; 
+        border: 1px solid #ced4da; 
+        border-radius: 4px; 
+        min-width: 250px;
+        font-size: 1em;
+    }
+
+    /* ESTILOS DE BOTÃO */
+    .btn { 
+        padding: 10px 20px; 
+        border: none; 
+        border-radius: var(--border-radius); 
+        cursor: pointer; 
+        transition: all 0.3s ease; 
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+        text-align: center;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary { background-color: var(--primary-color); color: white; }
+    .btn-primary:hover:not(:disabled) { background-color: #0056b3; transform: translateY(-1px); }
+    .btn-danger { background-color: var(--danger-color); color: white; }
+    .btn-danger:hover:not(:disabled) { background-color: #bd2130; transform: translateY(-1px); }
+    .btn-success { background-color: var(--success-color); color: white; }
+    .btn-success:hover:not(:disabled) { background-color: #1e7e34; transform: translateY(-1px); }
+    .btn-secondary { background-color: var(--secondary-color); color: white; }
+    .btn-secondary:hover:not(:disabled) { background-color: #5a6268; transform: translateY(-1px); }
+    .btn-outline { 
+        background: none; 
+        border: 1px solid var(--primary-color); 
+        color: var(--primary-color);
+        padding: 9px 19px; 
+    }
+    .btn-outline:hover:not(:disabled) { background: var(--primary-color); color: white; }
+    .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+
+    /* ESTILOS DE FORMULÁRIO GERAL (USADO PARA REGISTER E ADMIN REGISTER) */
+    .register-form {
+        padding: 30px;
+        border: 1px solid #e9ecef; 
+        border-radius: var(--border-radius); 
+        margin: 20px auto; 
+        background: #fff;
+        box-shadow: var(--card-shadow);
+        max-width: 600px;
+    }
+    .register-form input:not([type="file"]), .register-form textarea, .register-form input[type="number"], .register-form input[type="email"], .register-form input[type="password"] { 
+        width: 100%; 
+        padding: 12px; 
+        margin-bottom: 15px; 
+        border: 1px solid #ced4da; 
+        border-radius: 4px; 
+        box-sizing: border-box; 
+        font-size: 1em;
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .register-form input:focus, .register-form textarea:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        outline: none;
+    }
+    .register-form label { font-weight: 500; margin-top: 15px; display: block; color: var(--text-dark); margin-bottom: 5px;}
+    
+    /* ESTILOS DE LOGIN */
+    .auth-form { 
+        padding: 40px; 
+        border-radius: var(--border-radius); 
+        background: #fff;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-width: 400px;
+        width: 100%;
+        text-align: center;
+        box-sizing: border-box;
+    }
+    .auth-form h2 {
+        border-bottom: none; 
+        padding-bottom: 0; 
+        margin-top: 0;
+        margin-bottom: 30px;
+        font-size: 2em;
+        font-weight: 600;
+    }
+    .auth-form input { 
+        width: 100%; 
+        padding: 12px; 
+        margin-bottom: 20px;
+        border: 1px solid #ced4da; 
+        border-radius: 4px; 
+        box-sizing: border-box; 
+        font-size: 1em;
+    }
+    .auth-form .btn-primary { width: 100%; font-size: 1.1em; padding: 12px 20px; }
+
+    /* PRÉ-VISUALIZAÇÃO DE IMAGEM E PROGRESS BAR */
+    .preview-img { max-width: 250px; height: auto; display: block; margin: 10px 0 20px 0; border: 1px solid #ddd; border-radius: var(--border-radius); object-fit: contain; }
+    .progress-bar { height: 10px; background-color: var(--accent-light); border-radius: 5px; overflow: hidden; margin: 10px 0 20px 0; }
+    .progress { height: 100%; background-color: var(--success-color); transition: width 0.4s ease; }
+
+    /* GRID DE PRODUTOS */
+    .product-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 25px; 
+        margin-top: 15px; 
+    }
+    .product-card { border: 1px solid #e0e0e0; border-radius: var(--border-radius); overflow: hidden; box-shadow: var(--card-shadow); transition: transform 0.3s, box-shadow 0.3s; display: flex; flex-direction: column; background: #fff; }
+    .product-card:hover { transform: translateY(-3px); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.08); }
+    .product-card img { width: 100%; height: 200px; object-fit: cover; border-bottom: 1px solid #eee; }
+    .product-info { padding: 15px; display: flex; flex-direction: column; flex-grow: 1; justify-content: space-between; }
+    .product-info h3 { margin-top: 0; font-size: 1.2em; font-weight: 500; color: var(--text-dark); }
+    .price { font-weight: 700; color: var(--primary-color); font-size: 1.3em; margin: 5px 0 15px 0; }
+    .product-info .btn-group { display: flex; gap: 8px; margin-top: 10px; }
+    .product-info .btn-group button { flex: 1; padding: 8px 10px; font-size: 0.9em; }
+
+    /* LISTA DE PEDIDOS */
+    .orders-list { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); 
+        gap: 25px; 
+        margin-top: 30px; 
+    }
+    .order-card { border: 1px solid #e0e0e0; border-radius: var(--border-radius); padding: 20px; box-shadow: var(--card-shadow); background: #fff; display: flex; flex-direction: column; }
+    .order-card h3 { color: var(--secondary-color); margin-top: 0; font-weight: 600; border-bottom: 1px dashed var(--accent-light); padding-bottom: 10px; margin-bottom: 15px; font-size: 1.3em; }
+    .order-total { font-size: 1.5em; font-weight: 700; color: var(--success-color); margin: 15px 0; }
+    .order-items { margin-bottom: 20px; padding: 10px; border: 1px solid var(--accent-light); border-radius: 4px; flex-grow: 1; }
+    .order-items h4 { font-size: 1em; margin-top: 0; color: var(--secondary-color); font-weight: 500;}
+    .order-items ul { list-style: none; padding: 0; margin: 0;}
+    .order-items li { background: var(--bg-light); padding: 8px 10px; margin-bottom: 5px; border-radius: 3px; font-size: 0.95em; }
+    .order-card .btn-danger { margin-top: 15px; width: 100%; padding: 10px 0; }
+
+    /* MENSAGENS DE FEEDBACK */
+    .msg-error { background-color: #f8d7da; color: var(--danger-color); padding: 15px; border-left: 5px solid var(--danger-color); border-radius: var(--border-radius); margin-top: 20px; font-weight: 500; }
+    .msg-success { background-color: #d4edda; color: #155724; padding: 15px; border-left: 5px solid var(--success-color); border-radius: var(--border-radius); margin-top: 20px; font-weight: 500; }
+    
+    
+    /* --- MEDIA QUERIES PARA RESPONSIVIDADE EM CELULAR --- */
+
+    /* Regras aplicadas para telas menores que 768px (Móvel e Tablet Pequeno) */
+    @media (max-width: 768px) {
+        
+        /* Layout Geral */
+        .admin-container { 
+            margin: 0; 
+            padding: 15px; 
+            border-radius: 0; 
+            box-shadow: none; 
+        } 
+        .login-container { padding: 15px; }
+
+        /* Tipografia */
+        h1 { font-size: 1.8em; }
+        h2 { font-size: 1.4em; margin-top: 30px; margin-bottom: 15px; }
+
+        /* Cabeçalho e Botões */
+        .header-actions { 
+            flex-direction: column;
+            gap: 8px; 
+            width: 100%;
+        }
+        .header-actions .btn { 
+            width: 100%; 
+            justify-content: center; 
+        }
+        
+        /* Barra de Ações e Busca (para dispositivos móveis) */
+        .product-actions-bar {
+            flex-direction: column; /* Empilha botão e busca */
+            gap: 15px;
+        }
+        .product-actions-bar .btn-success {
+            width: 100%;
+            justify-content: center;
+            order: -1; /* Coloca o botão em cima do input */
+        }
+        .product-actions-bar input {
+            width: 100%;
+            min-width: 100%;
+        }
+
+        /* Formulários (Login e Cadastro/Edição) */
+        .auth-form { padding: 30px 20px; }
+        .register-form { 
+            padding: 20px; 
+            margin: 10px 0; 
+            max-width: 100%; 
+        }
+        
+        /* Grupos de Botões */
+        .btn-group { 
+            flex-direction: column;
+            gap: 8px; 
+        }
+        .btn-group button { 
+            width: 100%; 
+        }
+
+        /* Grids de Listagem (Produtos e Pedidos) */
+        .product-grid {
+            grid-template-columns: 1fr; 
+            gap: 15px;
+        }
+        .product-card img { height: 150px; }
+
+        .orders-list {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+    }
+    
+    /* Regras aplicadas para telas menores que 576px (Celular Extremo) */
+    @media (max-width: 576px) {
+        .btn { padding: 8px 15px; font-size: 0.9em; }
+        h1 { font-size: 1.6em; }
+        h2 { font-size: 1.3em; }
+        .product-card .btn-group button { font-size: 0.8em; padding: 6px 8px; }
+    }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+
+        <div v-if="currentView !== 'login' || user" class="admin-container">
+            <div class="header">
+                <h1>⚙️ Painel de Gerenciamento Admin</h1>
+                
+                <div class="header-actions">
+                    <button class="btn btn-outline" v-if="user" @click="resetFormAndNavigate('admin')">
+                        📦 Produtos
+                    </button>
+                    <button class="btn btn-outline" v-if="user" @click="resetFormAndNavigate('orders')">
+                        📝 Pedidos
+                    </button>
+                    <button class="btn btn-outline" v-if="user" @click="resetFormAndNavigate('register-admin')">
+                        👥 Cadastrar Admin
+                    </button>
+                    
+                    <button class="btn btn-secondary" v-if="!user" @click="currentView = 'login'">
+                        🔑 Login Admin
+                    </button>
+                    <button class="btn btn-danger" v-else @click="handleLogout">
+                        👋 Sair ({{ user.email }})
+                    </button>
+                </div>
+            </div>
+
+            <div v-if="globalSuccess" class="msg-success">✅ {{ globalSuccess }}</div>
+            <div v-if="globalError" class="msg-error">❌ {{ globalError }}</div>
+
+            <div v-if="currentView === 'admin' && user">
+                
+                <h2>📦 Gerenciar Produtos ({{ filteredProducts.length }} de {{ products.length }})</h2>
+
+                <div class="product-actions-bar">
+                    <button class="btn btn-success" @click="resetFormAndNavigate('register')">
+                        ➕ Cadastrar Novo Produto
+                    </button>
+                    <input 
+                        type="text" 
+                        v-model="searchTerm" 
+                        placeholder="🔍 Buscar produtos por nome..."
+                        aria-label="Buscar produtos"
+                    >
+                </div>
+                
+                <div v-if="isDataLoading" style="text-align: center; margin-top: 50px;">
+                    <p style="color: var(--secondary-color);">Carregando catálogo...</p>
+                </div>
+                
+                <div v-else class="product-grid">
+                    <div class="product-card" v-for="product in filteredProducts" :key="product.id">
+                        <img :src="product.imageUrl" :alt="product.name" @error="e => e.target.src='https://via.placeholder.com/200?text=Sem+Imagem'">
+                        <div class="product-info">
+                            <div>
+                                <h3>{{ product.name }}</h3>
+                                <p class="price">{{ formatPrice(product.price) }}</p>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-primary" @click="startEdit(product)">Editar</button>
+                                <button class="btn btn-danger" @click="handleProductDelete(product.id, product.imageUrl)">Excluir</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div v-if="filteredProducts.length === 0 && !isDataLoading && searchTerm" style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--secondary-color);">
+                        <p>Nenhum produto encontrado com o termo **"{{ searchTerm }}"**.</p>
+                    </div>
+
+                    <div v-else-if="products.length === 0 && !isDataLoading" style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--secondary-color);">
+                        <p>Nenhum produto cadastrado no momento. Utilize o botão "Cadastrar Novo Produto" para começar.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else-if="currentView === 'register' && user">
+                <h2>{{ isEditing ? '✏️ Editar Produto' : '➕ Novo Produto' }}</h2>
+                <div class="register-form">
+                    <label for="name">Nome do Produto:</label>
+                    <input type="text" id="name" v-model="newProduct.name" required>
+
+                    <label for="price">Preço (R$):</label>
+                    <input type="number" id="price" v-model="newProduct.price" min="0.01" step="0.01" required>
+
+                    <label for="image">Imagem do Produto ({{ isEditing ? 'Opcional' : 'Obrigatório' }}):</label>
+                    <input type="file" id="image" @change="handleFileChange" :disabled="isRegistering" accept="image/*">
+                    
+                    <div v-if="imagePreviewUrl || newProduct.imageUrl">
+                        <p style="font-size: 0.9em; margin-bottom: 5px; margin-top: 15px;">Pré-visualização da Imagem:</p>
+                        <img :src="imagePreviewUrl || newProduct.imageUrl" class="preview-img">
+                    </div>
+
+                    <div v-if="isRegistering && uploadProgress > 0 && uploadProgress < 100">
+                        <p style="font-size: 0.9em; color: var(--primary-color);">Enviando Imagem: {{ Math.round(uploadProgress) }}%</p>
+                        <div class="progress-bar"><div class="progress" :style="{ width: uploadProgress + '%' }"></div></div>
+                    </div>
+
+                    <div class="btn-group" style="margin-top: 20px;">
+                        <button class="btn btn-success" 
+                                @click="isEditing ? handleProductUpdate() : handleProductRegister()"
+                                :disabled="isRegistering || !newProduct.name || newProduct.price <= 0 || (!isEditing && !imageFile)">
+                            {{ isRegistering ? 'Salvando...' : (isEditing ? '💾 Salvar Alterações' : '✨ Cadastrar Produto') }}
+                        </button>
+                        <button class="btn btn-secondary" @click="resetFormAndNavigate('admin')" :disabled="isRegistering">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else-if="currentView === 'orders' && user">
+                <h2>📝 Pedidos Recebidos ({{ orders.length }})</h2>
+                <div v-if="isOrdersLoading" style="text-align: center; margin-top: 50px;">
+                    <p style="color: var(--secondary-color);">Carregando Pedidos...</p>
+                </div>
+                <div v-else-if="orders.length === 0" style="text-align: center; padding: 50px; color: var(--secondary-color);">
+                    <p>Nenhum pedido foi realizado ainda.</p>
+                </div>
+                <div v-else class="orders-list">
+                    <div class="order-card" v-for="order in orders" :key="order.id">
+                        <h3>Pedido #{{ order.id.substring(0, 8).toUpperCase() }}</h3>
+                        <p><strong>Data:</strong> {{ formatDate(order.date) }}</p>
+                        
+                        <div class="order-items">
+                            <h4>Itens ({{ order.items.length }}):</h4>
+                            <ul>
+                                <li v-for="item in order.items" :key="item.id">
+                                    {{ item.name }} ({{ formatPrice(item.price) }})
+                                </li>
+                            </ul>
+                        </div>
+
+                        <p class="order-total">Total: {{ formatPrice(order.total) }}</p>
+                        <button class="btn btn-danger" @click="handleOrderDelete(order.id)">
+                            🗑️ Excluir Pedido (Concluído)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else-if="currentView === 'register-admin' && user">
+                <h2>👥 Cadastrar Novo Administrador</h2>
+                <div class="register-form">
+                    <p style="color: var(--danger-color); font-weight: 500;">
+                        ⚠️ **ATENÇÃO:** Para produção, esta função deve ser implementada com **Cloud Functions** para garantir a segurança.
+                    </p>
+
+                    <label for="adminEmail">Email do Novo Admin:</label>
+                    <input type="email" id="adminEmail" v-model="newAdmin.email" required :disabled="isRegistering">
+
+                    <label for="adminPassword">Senha (Mín. 6 caracteres):</label>
+                    <input type="password" id="adminPassword" v-model="newAdmin.password" required :disabled="isRegistering">
+
+                    <div class="btn-group" style="margin-top: 20px;">
+                        <button class="btn btn-success" 
+                                @click="handleAdminRegister"
+                                :disabled="isRegistering || !newAdmin.email || newAdmin.password.length < 6">
+                            {{ isRegistering ? 'Criando...' : '➕ Criar Conta Admin' }}
+                        </button>
+                        <button class="btn btn-secondary" @click="resetFormAndNavigate('admin')" :disabled="isRegistering">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else-if="!user && currentView !== 'login'">
+                <h2 style="color: var(--danger-color);">Acesso Não Autorizado</h2>
+                <p>Faça login para acessar o painel de gerenciamento.</p>
+                <button class="btn btn-primary" @click="currentView = 'login'">Ir para Login</button>
+            </div>
+        </div>
+
+        <div v-if="currentView === 'login' && !user" class="login-container">
+            <div class="auth-form">
+                <h2>🔑 Login Administrativo</h2>
+                <input type="email" v-model="email" placeholder="Email" :disabled="isLoading">
+                <input type="password" v-model="password" placeholder="Senha" @keyup.enter="handleLogin" :disabled="isLoading">
+                <button class="btn btn-primary" @click="handleLogin" :disabled="isLoading">
+                    {{ isLoading ? 'Acessando...' : 'Entrar' }}
+                </button>
+                <div v-if="error" class="msg-error">⚠️ {{ error }}</div>
+            </div>
+        </div>
+        
+    </div>
+
+   <script>
+    const { createApp, ref, onMounted, computed, watch } = Vue;
+
+    // ** CONFIGURAÇÃO DO FIREBASE ** (Mantenha o seu config original aqui)
+    const firebaseConfig = {
+        apiKey: "AIzaSyAnGyAYBthXQs5rEylnLXCxOVQKKN1FP34",
+        authDomain: "grafica-619fd.firebaseapp.com",
+        databaseURL: "https://grafica-619fd-default-rtdb.firebaseio.com",
+        projectId: "grafica-619fd",
+        storageBucket: "grafica-619fd.firebasestorage.app",
+        messagingSenderId: "1022124441596",
+        appId: "1:1022124441596:web:d6f25056f38a6babc67c79",
+        measurementId: "G-SQ4QNTFXCM"
+    };
+    
+    // Inicialização dos serviços
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const database = firebase.database();
+    const storage = firebase.storage(); 
+
+    createApp({
+        setup() {
+            // --- 1. ESTADOS REATIVOS ---
+            const user = ref(null);
+            const email = ref('');
+            const password = ref('');
+            const error = ref(null);
+            const isLoading = ref(false); 
+            const currentView = ref('login'); 
+            const globalSuccess = ref(null); 
+            const globalError = ref(null); 
+            const products = ref([]);
+            const isDataLoading = ref(false); 
+            const isRegistering = ref(false); 
+            const newProduct = ref({ id: null, name: '', price: 0.00, imageUrl: '' }); 
+            const imageFile = ref(null);
+            const uploadProgress = ref(0);
+            const imagePreviewUrl = ref(''); 
+            const orders = ref([]);
+            const isOrdersLoading = ref(false); 
+            const newAdmin = ref({ email: '', password: '' });
+            
+            // NOVO: Estado para o termo de busca
+            const searchTerm = ref('');
+
+            // Variáveis para armazenar as funções de desvinculação da escuta (se usasse .on)
+            let productListener = null;
+            let orderListener = null;
+
+            // --- 2. PROPRIEDADES COMPUTADAS ---
+            const isEditing = computed(() => newProduct.value.id !== null);
+            
+            // NOVO: Propriedade Computada para filtrar produtos em tempo real
+            const filteredProducts = computed(() => {
+                if (!searchTerm.value) {
+                    return products.value;
+                }
+                
+                const term = searchTerm.value.toLowerCase().trim();
+                
+                // Filtra pelo nome do produto
+                return products.value.filter(product => {
+                    return product.name.toLowerCase().includes(term);
+                });
+            });
+
+
+            // --- 3. MÉTODOS DE UTILIDADE E FEEDBACK ---
+
+            const clearFeedback = () => {
+                globalSuccess.value = null;
+                globalError.value = null;
+                error.value = null;
+            };
+
+            const setFeedback = (type, message) => {
+                clearFeedback();
+                if (type === 'success') {
+                    globalSuccess.value = message;
+                } else if (type === 'error') {
+                    globalError.value = message;
+                }
+                setTimeout(clearFeedback, 4000);
+            };
+
+            const formatPrice = (value) => {
+                const num = parseFloat(value);
+                if (isNaN(num)) return 'R$ 0,00';
+                return 'R$ ' + num.toFixed(2).replace('.', ',');
+            };
+
+            const formatDate = (timestamp) => {
+                if (!timestamp) return 'N/A';
+                const date = new Date(timestamp);
+                return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
+            };
+
+            const resetForm = () => {
+                newProduct.value = { id: null, name: '', price: 0.00, imageUrl: '' };
+                imageFile.value = null;
+                imagePreviewUrl.value = '';
+                uploadProgress.value = 0;
+                newAdmin.value = { email: '', password: '' };
+                // NOVO: Limpa o termo de busca ao sair da view admin
+                searchTerm.value = ''; 
+                
+                const fileInput = document.querySelector('input[type="file"]');
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+            };
+            
+            const stopAllListeners = () => {
+                // Se tivesse usado .on, o código para desligar seria:
+                // database.ref('produtos').off('value', productListener); 
+                // database.ref('pedidos').off('value', orderListener);
+                productListener = null;
+                orderListener = null;
+            };
+
+            const resetFormAndNavigate = (view) => {
+                clearFeedback();
+                resetForm();
+                stopAllListeners(); 
+                currentView.value = view;
+
+                if (view === 'admin') {
+                    fetchProducts();
+                } else if (view === 'orders') {
+                    fetchOrders();
+                }
+            };
+
+            // --- 4. MÉTODOS DE AUTENTICAÇÃO ---
+
+            const handleLogin = async () => { 
+                isLoading.value = true;
+                clearFeedback();
+                try {
+                    await auth.signInWithEmailAndPassword(email.value, password.value);
+                    // O Listener no onMounted cuida da navegação e fetchProducts
+                    email.value = '';
+                    password.value = '';
+                } catch (err) {
+                    error.value = 'Falha no login: Email ou senha inválidos.';
+                } finally {
+                    isLoading.value = false;
+                }
+            };
+
+            const handleLogout = async () => { 
+                stopAllListeners();
+                await auth.signOut();
+                user.value = null;
+                currentView.value = 'login';
+                clearFeedback();
+                resetForm();
+            };
+
+            const handleAdminRegister = async () => {
+                isRegistering.value = true;
+                clearFeedback();
+                try {
+                    // Cria o usuário no Firebase Authentication
+                    await auth.createUserWithEmailAndPassword(newAdmin.value.email, newAdmin.value.password);
+
+                    // O Firebase Auth cuida da autenticação, não é necessário adicionar no Realtime DB
+                    setFeedback('success', `Novo administrador (${newAdmin.value.email}) cadastrado com sucesso!`);
+                    resetFormAndNavigate('admin'); // Volta para a lista de produtos
+                } catch (err) {
+                    let errorMessage = 'Falha ao cadastrar administrador.';
+                    if (err.code === 'auth/email-already-in-use') {
+                        errorMessage = 'O email já está em uso.';
+                    } else if (err.code === 'auth/weak-password') {
+                        errorMessage = 'A senha deve ter no mínimo 6 caracteres.';
+                    } else if (err.code === 'auth/invalid-email') {
+                        errorMessage = 'O formato do email é inválido.';
+                    }
+                    setFeedback('error', errorMessage);
+                    console.error("Erro ao cadastrar admin:", err);
+                } finally {
+                    isRegistering.value = false;
+                }
+            };
+
+
+            // --- 5. MÉTODOS DE DADOS (FETCH com .once) ---
+
+            const fetchProducts = async () => {
+                isDataLoading.value = true;
+                try {
+                    const snapshot = await database.ref('produtos').once('value'); 
+                    const data = snapshot.val();
+                    const productList = [];
+                    if (data) {
+                        for (let id in data) {
+                            productList.push({ id, ...data[id], price: parseFloat(data[id].price || 0) });
+                        }
+                    }
+                    products.value = productList.reverse();
+                } catch (err) {
+                    console.error("Erro ao carregar produtos:", err);
+                    setFeedback('error', 'Erro ao carregar a lista de produtos.');
+                } finally {
+                    isDataLoading.value = false;
+                }
+            };
+            
+            const fetchOrders = async () => {
+                isOrdersLoading.value = true;
+                try {
+                    const snapshot = await database.ref('pedidos').once('value');
+                    const data = snapshot.val();
+                    const ordersList = [];
+                    if (data) {
+                        for (let id in data) {
+                            ordersList.push({ 
+                                id, 
+                                ...data[id], 
+                                total: parseFloat(data[id].total || 0),
+                                items: data[id].items || [] 
+                            });
+                        }
+                    }
+                    orders.value = ordersList.reverse();
+                } catch (err) {
+                    console.error("Erro ao carregar pedidos:", err);
+                    setFeedback('error', 'Erro ao carregar a lista de pedidos.');
+                } finally {
+                    isOrdersLoading.value = false;
+                }
+            };
+
+
+            // --- 6. MÉTODOS DE PRODUTOS (CRUD) ---
+
+            const handleFileChange = (event) => {
+                const file = event.target.files[0];
+                imageFile.value = file || null;
+                imagePreviewUrl.value = ''; 
+
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imagePreviewUrl.value = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const uploadImage = (file) => {
+                if (!file) return Promise.resolve(null);
+                
+                const fileName = `${Date.now()}_${file.name}`;
+                const storageRef = storage.ref(`images/${fileName}`);
+                const uploadTask = storageRef.put(file);
+
+                return new Promise((resolve, reject) => {
+                    uploadTask.on('state_changed', 
+                        (snapshot) => {
+                            uploadProgress.value = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        }, 
+                        (error) => {
+                            reject(new Error("Falha no upload da imagem: " + error.message));
+                        },
+                        async () => {
+                            const imageUrl = await storageRef.getDownloadURL();
+                            resolve(imageUrl);
+                        }
+                    );
+                });
+            };
+
+            const deleteOldImage = async (oldImageUrl) => {
+                if (oldImageUrl && oldImageUrl.includes(storage.storageBucket)) {
+                    try {
+                        const imageRef = storage.refFromURL(oldImageUrl);
+                        await imageRef.delete();
+                    } catch (e) {
+                        console.warn("Aviso: Imagem antiga não foi excluída ou não existe no Storage.", e);
+                    }
+                }
+            };
+
+            const startEdit = (product) => {
+                newProduct.value = { ...product }; 
+                imagePreviewUrl.value = product.imageUrl;
+                currentView.value = 'register';
+                clearFeedback();
+            };
+
+            const handleProductRegister = async () => {
+                isRegistering.value = true;
+                clearFeedback();
+
+                if (!imageFile.value) {
+                    setFeedback('error', "Selecione uma imagem para o novo produto.");
+                    isRegistering.value = false;
+                    return;
+                }
+                
+                try {
+                    const imageUrl = await uploadImage(imageFile.value);
+                    
+                    const productData = {
+                        name: newProduct.value.name,
+                        price: parseFloat(newProduct.value.price).toFixed(2),
+                        imageUrl: imageUrl || ''
+                    };
+
+                    await database.ref('produtos').push(productData);
+                    
+                    setFeedback('success', `Produto "${productData.name}" cadastrado com sucesso!`);
+                    resetFormAndNavigate('admin');
+                } catch (err) {
+                    setFeedback('error', 'Erro ao cadastrar produto.');
+                    console.error("Erro no cadastro:", err);
+                } finally {
+                    isRegistering.value = false;
+                }
+            };
+
+            const handleProductUpdate = async () => {
+                isRegistering.value = true;
+                clearFeedback();
+                let imageUrl = newProduct.value.imageUrl;
+                const oldImageUrl = products.value.find(p => p.id === newProduct.value.id)?.imageUrl;
+
+                try {
+                    // Se um novo arquivo foi selecionado, faz o upload e exclui o antigo
+                    if (imageFile.value) {
+                        imageUrl = await uploadImage(imageFile.value);
+                        await deleteOldImage(oldImageUrl);
+                    } else if (!oldImageUrl) {
+                        // Caso seja edição e não tinha imagem e não selecionou uma nova
+                        setFeedback('error', "Selecione uma imagem para o produto.");
+                        isRegistering.value = false;
+                        return;
+                    }
+                    
+                    const productData = {
+                        name: newProduct.value.name,
+                        price: parseFloat(newProduct.value.price).toFixed(2),
+                        imageUrl: imageUrl
+                    };
+
+                    await database.ref('produtos/' + newProduct.value.id).set(productData);
+                    
+                    setFeedback('success', `Produto "${productData.name}" atualizado com sucesso!`);
+                    resetFormAndNavigate('admin');
+                } catch (err) {
+                    setFeedback('error', 'Erro ao atualizar produto.');
+                    console.error("Erro na atualização:", err);
+                } finally {
+                    isRegistering.value = false;
+                }
+            };
+
+            const handleProductDelete = async (id, imageUrl) => {
+                if (confirm('Tem certeza que deseja excluir este produto? Esta ação é irreversível.')) {
+                    clearFeedback();
+                    try {
+                        // 1. Excluir a imagem do Storage (se existir)
+                        await deleteOldImage(imageUrl);
+
+                        // 2. Excluir o registro do Database
+                        await database.ref('produtos/' + id).remove();
+
+                        setFeedback('success', 'Produto excluído com sucesso!');
+                        // Atualiza a lista localmente (ou recarrega, se preferir)
+                        products.value = products.value.filter(p => p.id !== id);
+                    } catch (err) {
+                        setFeedback('error', 'Erro ao excluir produto.');
+                        console.error("Erro na exclusão:", err);
+                    }
+                }
+            };
+
+            // --- 7. MÉTODOS DE PEDIDOS (CRUD) ---
+
+            const handleOrderDelete = async (id) => {
+                if (confirm('Tem certeza que deseja marcar este pedido como CONCLUÍDO e excluí-lo do painel?')) {
+                    clearFeedback();
+                    try {
+                        await database.ref('pedidos/' + id).remove();
+                        setFeedback('success', 'Pedido marcado como concluído e excluído com sucesso!');
+                        // Atualiza a lista
+                        orders.value = orders.value.filter(o => o.id !== id);
+                    } catch (err) {
+                        setFeedback('error', 'Erro ao excluir pedido.');
+                        console.error("Erro na exclusão do pedido:", err);
+                    }
+                }
+            };
+
+
+            // --- 8. LIFECYCLE HOOKS ---
+
+            onMounted(() => {
+                // Listener de autenticação para gerenciar o estado de login
+                auth.onAuthStateChanged((currentUser) => {
+                    user.value = currentUser;
+                    if (currentUser) {
+                        currentView.value = 'admin';
+                        fetchProducts(); // Carrega produtos automaticamente após o login
+                        clearFeedback();
+                    } else {
+                        currentView.value = 'login';
+                    }
+                });
+            });
+
+
+            // --- 9. EXPOSIÇÃO PARA O TEMPLATE ---
+            return {
+                user, email, password, error, isLoading, currentView, 
+                globalSuccess, globalError, products, isDataLoading, isRegistering,
+                newProduct, imageFile, uploadProgress, imagePreviewUrl, isEditing,
+                orders, isOrdersLoading, newAdmin,
+                
+                // NOVO: Filtro
+                searchTerm, 
+                filteredProducts, // NOVO: Lista filtrada
+
+                handleLogin, handleLogout, handleAdminRegister,
+                handleFileChange, startEdit, handleProductRegister,
+                handleProductUpdate, handleProductDelete, handleOrderDelete,
+                resetFormAndNavigate,
+                formatPrice, formatDate
+            };
+        }
+    }).mount('#app');
+    </script>
+</body>
+</html>
