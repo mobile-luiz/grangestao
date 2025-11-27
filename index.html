@@ -1210,20 +1210,20 @@
 
                 } else if (newStatus === 'Cancelado') {
                     messageText = 
-                        `*❌ Pedido Cancelado - ${customerName} 😥*\n\n` +
+                        `*❌ Pedido Cancelado - ${customerName} *\n\n` +
                         `Lamentamos informar, mas seu pedido *#${orderIdShort}* foi *CANCELADO*.\n\n` +
                         `Detalhes:\n` +
                         `📅 Data do Cancelamento: ${now}\n\n` +
                         `Se foi um engano ou se precisar de ajuda para refazer a compra, por favor, responda esta mensagem. Estamos aqui para ajudar! 🙏`;
                         
-                } else if (newStatus === 'Concluído') { 
-                    messageText = 
-                        `*✅ PEDIDO CONCLUÍDO! Obrigado, ${customerName}!* 🙏\n\n` +
-                        `Confirmamos que seu pedido *#${orderIdShort}* foi finalizado com sucesso! Esperamos que tenha gostado dos seus produtos. ✨\n\n` +
-                        `*Resumo:*\n` +
-                        `📦 Itens:\n${orderItemsList}\n` + // <-- ITENS ADICIONADOS
-                        `💰 Valor Total: ${totalFormatted}\n\n` +
-                        `*Agradecemos a sua confiança e volte sempre para mais novidades!* 😉`;
+              //  } else if (newStatus === 'Concluído') { 
+               //     messageText = 
+                //        `*✅ PEDIDO CONCLUÍDO! Obrigado, ${customerName}!* 🙏\n\n` +
+                 //       `Confirmamos que seu pedido *#${orderIdShort}* foi finalizado com sucesso! Esperamos que tenha gostado dos seus produtos. ✨\n\n` +
+                 //       `*Resumo:*\n` +
+                 //       `📦 Itens:\n${orderItemsList}\n` + // <-- ITENS ADICIONADOS
+                  //      `💰 Valor Total: ${totalFormatted}\n\n` +
+                  //      `*Agradecemos a sua confiança e volte sempre para mais novidades!* 😉`;
                 }
                 
                 if (messageText) {
