@@ -589,6 +589,12 @@
                                 <div class="customer-info">
                                     <p><strong>Cliente:</strong> {{ order.customer.name }}</p>
                                     <p><strong>Email:</strong> {{ order.customer.email }}</p>
+                                    <p v-if="order.customer.whatsapp">
+                                        <strong>Whatsapp:</strong> 
+                                        <a :href="'https://wa.me/55' + order.customer.whatsapp.replace(/[^0-9]/g, '')" target="_blank" style="color: var(--success-color); font-weight: 500;">
+                                            {{ order.customer.whatsapp }} 
+                                        </a>
+                                    </p>
                                     <p>
                                         <strong>Endereço:</strong> 
                                         {{ order.customer.address.street }}, {{ order.customer.address.number }} - {{ order.customer.address.city }} 
@@ -777,7 +783,7 @@
                 // Pedidos
                 const orders = ref([]);
                 const isOrdersLoading = ref(false); 
-                const orderFilter = ref('Todos'); // NOVO: Estado do filtro de pedidos
+                const orderFilter = ref('Todos'); 
                 
                 // Admin Register
                 const isRegistering = ref(false); 
@@ -795,7 +801,7 @@
                     });
                 });
 
-                // NOVO: Propriedade computada para filtrar pedidos
+                // Propriedade computada para filtrar pedidos
                 const filteredOrders = computed(() => {
                     const filter = orderFilter.value;
                     
@@ -868,7 +874,7 @@
                     uploadProgress.value = 0;
                     newAdmin.value = { email: '', password: '' };
                     searchTerm.value = ''; 
-                    orderFilter.value = 'Todos'; // Reinicia o filtro ao navegar
+                    orderFilter.value = 'Todos'; 
                     
                     const fileInput = document.querySelector('input[type="file"]');
                     if (fileInput) fileInput.value = '';
@@ -1169,6 +1175,50 @@
                             }
                             
                             setFeedback('success', `Status do pedido #${order.id.substring(0, 8).toUpperCase()} atualizado para "${newStatus}" com sucesso!`);
+                            
+                            
+                            // --- LÓGICA DE MENSAGEM AUTOMÁTICA DO WHATSAPP ---
+                            if (newStatus === 'Enviado' || newStatus === 'Cancelado') {
+                                const customerName = order.customer.name;
+                                const customerWhatsapp = order.customer.whatsapp ? order.customer.whatsapp.replace(/[^0-9]/g, '') : null;
+                                const orderIdShort = order.id.substring(0, 8).toUpperCase();
+                                
+                                if (customerWhatsapp) {
+                                    let messageText = '';
+                                    if (newStatus === 'Enviado') {
+                                        messageText = 
+                                            `Olá, ${customerName}! 👋\n\n` +
+                                            `Seu pedido *#${orderIdShort}* foi *ENVIADO* com sucesso!\n\n` +
+                                            `Detalhes do Envio:\n` +
+                                            `📦 Status: ENVIADO\n` +
+                                            `📅 Data: ${now}\n\n` +
+                                            `Acompanhe a entrega! Qualquer dúvida, estamos à disposição. 😊`;
+                                    } else if (newStatus === 'Cancelado') {
+                                        messageText = 
+                                            `Olá, ${customerName}!\n\n` +
+                                            `Seu pedido *#${orderIdShort}* foi *CANCELADO*.\n\n` +
+                                            `Detalhes do Cancelamento:\n` +
+                                            `❌ Status: CANCELADO\n` +
+                                            `📅 Data: ${now}\n\n` +
+                                            `Entre em contato conosco se precisar de mais informações ou para refazer seu pedido.`;
+                                    }
+
+                                    const encodedMessage = encodeURIComponent(messageText);
+                                    const whatsappUrl = `https://wa.me/55${customerWhatsapp}?text=${encodedMessage}`;
+                                    
+                                    // Abre a janela do WhatsApp no navegador.
+                                    window.open(whatsappUrl, '_blank');
+                                    
+                                    // Adiciona um feedback extra para o administrador
+                                    setFeedback('success', `Status do pedido atualizado. Abrindo WhatsApp para notificar ${customerName}.`);
+
+                                } else {
+                                    alert(`Pedido atualizado para "${newStatus}", mas o WhatsApp NÃO foi aberto: número de WhatsApp não cadastrado para o cliente.`);
+                                }
+                            }
+                            // --- FIM DA LÓGICA DE MENSAGEM AUTOMÁTICA DO WHATSAPP ---
+
+
                         } catch (err) {
                             setFeedback('error', `Erro ao atualizar status para ${newStatus}.`);
                             console.error("Erro na atualização de status:", err);
@@ -1222,7 +1272,7 @@
                     globalSuccess, globalError, products, isDataLoading, isRegistering,
                     newProduct, imageFile, uploadProgress, imagePreviewUrl, isEditing,
                     orders, isOrdersLoading, newAdmin, searchTerm, filteredProducts, 
-                    orderFilter, filteredOrders, // NOVOS EXPOSTOS
+                    orderFilter, filteredOrders, 
 
                     handleLogin, handleLogout, handleAdminRegister,
                     handleFileChange, startEdit, handleProductRegister,
