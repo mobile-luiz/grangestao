@@ -1128,101 +1128,125 @@
 
                 // --- 7. MÉTODOS DE PEDIDOS (CRUD) ---
 
-                const updateOrderStatus = async (order, newStatus) => {
-                    if (!order.clientUid || !order.id) {
-                        setFeedback('error', 'Erro: UID do cliente ou ID do pedido não encontrado.');
-                        return;
-                    }
+           const updateOrderStatus = async (order, newStatus) => {
+    if (!order.clientUid || !order.id) {
+        setFeedback('error', 'Erro: UID do cliente ou ID do pedido não encontrado.');
+        return;
+    }
 
-                    const confirmationMessage = `Tem certeza que deseja mudar o status do pedido #${order.id.substring(0, 8).toUpperCase()} para "${newStatus}"?`;
+    const confirmationMessage = `Tem certeza que deseja mudar o status do pedido #${order.id.substring(0, 8).toUpperCase()} para "${newStatus}"?`;
 
-                    if (confirm(confirmationMessage)) {
-                        clearFeedback();
+    if (confirm(confirmationMessage)) {
+        clearFeedback();
+        
+        let updateData = { status: newStatus };
+        const now = new Date().toLocaleString('pt-BR'); 
+
+        // Limpa todas as datas de status e define a nova
+        updateData.dateSent = null;
+        updateData.dateCanceled = null;
+        updateData.dateConcluded = null;
+
+        if (newStatus === 'Enviado') {
+            updateData.dateSent = now;
+        } else if (newStatus === 'Cancelado') {
+            updateData.dateCanceled = now;
+        } else if (newStatus === 'Concluído') { 
+            updateData.dateConcluded = now;
+        }
+        
+        // Garante que 'Processando' limpe todas as datas de status
+        if (newStatus === 'Processando') {
+            updateData.status = null; // Salva como nulo/vazio no DB
+        } else {
+            updateData.status = newStatus;
+        }
+
+        try {
+            const orderRef = database.ref(`pedidos/${order.clientUid}/${order.id}`);
+            await orderRef.update(updateData);
+            
+            // Atualiza o objeto local com os novos dados
+            const orderIndex = orders.value.findIndex(o => o.id === order.id);
+            if (orderIndex !== -1) {
+                // Precisa garantir que o status seja processando se o valor for nulo
+                const finalStatus = updateData.status || 'Processando';
+                orders.value[orderIndex] = { ...orders.value[orderIndex], ...updateData, status: finalStatus };
+            }
+            
+            // Adiciona um feedback de sucesso inicial (o WhatsApp pode demorar a abrir)
+            setFeedback('success', `Status do pedido #${order.id.substring(0, 8).toUpperCase()} atualizado para "${newStatus}" com sucesso!`);
+
+
+            // ----------------------------------------------------
+            // ✅ NOVA LÓGICA DE WHATSAPP MELHORADA COM EMOJIS, ITENS E AGRADECIMENTO
+            // ----------------------------------------------------
+            
+            const customerName = order.customer.name || 'Cliente';
+            // Tenta obter o WhatsApp do campo 'phone' ou 'whatsapp', tratando e limpando o número
+            const rawWhatsapp = order.customer.whatsapp || order.customer.phone || '';
+            const customerWhatsapp = rawWhatsapp.replace(/[^0-9]/g, ''); 
+            
+            const orderIdShort = order.id.substring(0, 8).toUpperCase();
+            const totalFormatted = formatPrice(order.total);
+            
+            // Cria a lista de itens, garantindo que order.items é um array
+            const itemsArray = Array.isArray(order.items) ? order.items : (order.items ? Object.values(order.items) : []);
+            const orderItemsList = itemsArray.map(item => `  - ${item.name} (x${item.quantity})`).join('\n');
+            
+            if (customerWhatsapp.length >= 8) { // Checa se tem um número válido (pelo menos 8 dígitos)
+                let messageText = '';
+                
+                if (newStatus === 'Enviado') {
+                    messageText = 
+                        `*🎉 ÓTIMA NOTÍCIA, ${customerName}! 🎉*\n\n` +
+                        `Seu pedido *#${orderIdShort}* foi *EMBALADO e ENVIADO*! 🚀\n\n` +
+                        `*Detalhes do Pedido:*\n` +
+                        `📦 Itens:\n${orderItemsList}\n` + // <-- ITENS ADICIONADOS
+                        `💰 Valor Total: ${totalFormatted}\n\n` +
+                        `🚚 Status: ENVIADO\n` +
+                        `📅 Data do Envio: ${now}\n\n` +
+                        `*Agradecemos a sua compra e preferência. Fique de olho na entrega!* 😊`;
+
+                } else if (newStatus === 'Cancelado') {
+                    messageText = 
+                        `*❌ Pedido Cancelado - ${customerName} 😥*\n\n` +
+                        `Lamentamos informar, mas seu pedido *#${orderIdShort}* foi *CANCELADO*.\n\n` +
+                        `Detalhes:\n` +
+                        `📅 Data do Cancelamento: ${now}\n\n` +
+                        `Se foi um engano ou se precisar de ajuda para refazer a compra, por favor, responda esta mensagem. Estamos aqui para ajudar! 🙏`;
                         
-                        let updateData = { status: newStatus };
-                        const now = new Date().toLocaleString('pt-BR'); 
-
-                        // Limpa todas as datas de status e define a nova
-                        updateData.dateSent = null;
-                        updateData.dateCanceled = null;
-                        updateData.dateConcluded = null;
-
-                        if (newStatus === 'Enviado') {
-                            updateData.dateSent = now;
-                        } else if (newStatus === 'Cancelado') {
-                            updateData.dateCanceled = now;
-                        } else if (newStatus === 'Concluído') { // NOVO STATUS
-                            updateData.dateConcluded = now;
-                        }
-                        
-                        // Garante que 'Processando' limpe todas as datas de status
-                        if (newStatus === 'Processando') {
-                            updateData.status = null; // Salva como nulo/vazio no DB
-                        } else {
-                            updateData.status = newStatus;
-                        }
-
-                        try {
-                            const orderRef = database.ref(`pedidos/${order.clientUid}/${order.id}`);
-                            await orderRef.update(updateData);
-                            
-                            // Atualiza o objeto local com os novos dados
-                            const orderIndex = orders.value.findIndex(o => o.id === order.id);
-                            if (orderIndex !== -1) {
-                                // Precisa garantir que o status seja processando se o valor for nulo
-                                const finalStatus = updateData.status || 'Processando';
-                                orders.value[orderIndex] = { ...orders.value[orderIndex], ...updateData, status: finalStatus };
-                            }
-                            
-                            setFeedback('success', `Status do pedido #${order.id.substring(0, 8).toUpperCase()} atualizado para "${newStatus}" com sucesso!`);
-                            
-                            
-                            // --- LÓGICA DE MENSAGEM AUTOMÁTICA DO WHATSAPP ---
-                            if (newStatus === 'Enviado' || newStatus === 'Cancelado') {
-                                const customerName = order.customer.name;
-                                const customerWhatsapp = order.customer.whatsapp ? order.customer.whatsapp.replace(/[^0-9]/g, '') : null;
-                                const orderIdShort = order.id.substring(0, 8).toUpperCase();
-                                
-                                if (customerWhatsapp) {
-                                    let messageText = '';
-                                    if (newStatus === 'Enviado') {
-                                        messageText = 
-                                            `Olá, ${customerName}! 👋\n\n` +
-                                            `Seu pedido *#${orderIdShort}* foi *ENVIADO* com sucesso!\n\n` +
-                                            `Detalhes do Envio:\n` +
-                                            `📦 Status: ENVIADO\n` +
-                                            `📅 Data: ${now}\n\n` +
-                                            `Acompanhe a entrega! Qualquer dúvida, estamos à disposição. 😊`;
-                                    } else if (newStatus === 'Cancelado') {
-                                        messageText = 
-                                            `Olá, ${customerName}!\n\n` +
-                                            `Seu pedido *#${orderIdShort}* foi *CANCELADO*.\n\n` +
-                                            `Detalhes do Cancelamento:\n` +
-                                            `❌ Status: CANCELADO\n` +
-                                            `📅 Data: ${now}\n\n` +
-                                            `Entre em contato conosco se precisar de mais informações ou para refazer seu pedido.`;
-                                    }
-
-                                    const encodedMessage = encodeURIComponent(messageText);
-                                    const whatsappUrl = `https://wa.me/55${customerWhatsapp}?text=${encodedMessage}`;
-                                    
-                                    // Abre a janela do WhatsApp no navegador.
-                                    window.open(whatsappUrl, '_blank');
-                                    
-                                    // Adiciona um feedback extra para o administrador
-                                    setFeedback('success', `Status do pedido atualizado. Abrindo WhatsApp para notificar ${customerName}.`);
-
-                                } else {
-                                    alert(`Pedido atualizado para "${newStatus}", mas o WhatsApp NÃO foi aberto: número de WhatsApp não cadastrado para o cliente.`);
-                                }
-                            }
-                            // --- FIM DA LÓGICA DE MENSAGEM AUTOMÁTICA DO WHATSAPP ---
+                } else if (newStatus === 'Concluído') { 
+                    messageText = 
+                        `*✅ PEDIDO CONCLUÍDO! Obrigado, ${customerName}!* 🙏\n\n` +
+                        `Confirmamos que seu pedido *#${orderIdShort}* foi finalizado com sucesso! Esperamos que tenha gostado dos seus produtos. ✨\n\n` +
+                        `*Resumo:*\n` +
+                        `📦 Itens:\n${orderItemsList}\n` + // <-- ITENS ADICIONADOS
+                        `💰 Valor Total: ${totalFormatted}\n\n` +
+                        `*Agradecemos a sua confiança e volte sempre para mais novidades!* 😉`;
+                }
+                
+                if (messageText) {
+                    const encodedMessage = encodeURIComponent(messageText);
+                    const whatsappUrl = `https://wa.me/55${customerWhatsapp}?text=${encodedMessage}`;
+                    // Abre o WhatsApp Web/App na janela do navegador
+                    window.open(whatsappUrl, '_blank');
+                    // Feedback extra para o admin 
+                    setFeedback('success', `Status do pedido atualizado para "${newStatus}". Abrindo WhatsApp para notificar ${customerName}.`);
+                }
+            } else if (newStatus === 'Enviado' || newStatus === 'Cancelado' || newStatus === 'Concluído') {
+                // Se o status é um dos que gera notificação, mas o número é inválido
+                alert(`Pedido atualizado para "${newStatus}". O WhatsApp NÃO foi aberto, pois o número de contato do cliente é inválido ou não foi fornecido.`);
+            }
+            // ----------------------------------------------------
+            // FIM DA NOVA LÓGICA DE WHATSAPP
+            // ----------------------------------------------------
 
 
-                        } catch (err) {
-                            setFeedback('error', `Erro ao atualizar status para ${newStatus}.`);
-                            console.error("Erro na atualização de status:", err);
-                        }
+        } catch (err) {
+            setFeedback('error', `Erro ao atualizar status para ${newStatus}.`);
+            console.error("Erro na atualização de status:", err);
+        }
                     }
                 };
 
