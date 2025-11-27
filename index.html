@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Gerenciamento Admin</title>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/vue@3"></script>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -166,12 +167,18 @@
             flex-wrap: wrap; 
             align-items: center;
         }
-        .product-actions-bar input {
+        .product-actions-bar input:not([type="date"]) {
             flex-grow: 1; 
             padding: 10px; 
             border: 1px solid #ced4da; 
             border-radius: 4px; 
             min-width: 250px;
+            font-size: 1em;
+        }
+        .product-actions-bar input[type="date"] {
+            padding: 10px; 
+            border: 1px solid #ced4da; 
+            border-radius: 4px; 
             font-size: 1em;
         }
 
@@ -201,7 +208,7 @@
         .btn-secondary:hover:not(:disabled) { background-color: #5a6268; transform: translateY(-1px); }
         .btn-outline { 
             background: none; 
-            border: 1px solid var(--secondary-color); /* Alterado para secundário para os filtros */
+            border: 1px solid var(--secondary-color);
             color: var(--secondary-color);
             padding: 9px 19px; 
         }
@@ -343,6 +350,72 @@
         .msg-error { background-color: #f8d7da; color: var(--danger-color); padding: 15px; border-left: 5px solid var(--danger-color); border-radius: var(--border-radius); margin-top: 20px; font-weight: 500; }
         .msg-success { background-color: #d4edda; color: #155724; padding: 15px; border-left: 5px solid var(--success-color); border-radius: var(--border-radius); margin-top: 20px; font-weight: 500; }
         
+        /* ESTILOS DE RELATÓRIO (GRÁFICO E TABELA) */
+        .reports-container {
+            /* ALTERAÇÃO AQUI: Garante que os itens fiquem um abaixo do outro */
+            display: flex;
+            flex-direction: column; 
+            gap: 25px; 
+            margin-top: 20px;
+        }
+        
+        .card { 
+            background: #fff; 
+            border-radius: var(--border-radius); 
+            box-shadow: var(--card-shadow); 
+            padding: 20px;
+        }
+
+        .chart-card {
+            /* Garante que o gráfico ocupe a largura total */
+            width: 100%; 
+        }
+        
+        .data-table-card {
+            /* Garante que a tabela ocupe a largura total */
+            width: 100%; 
+            min-height: auto;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+
+        .report-table th, .report-table td {
+            padding: 10px;
+            text-align: right;
+            border-bottom: 1px solid var(--accent-light);
+        }
+        
+        .report-table th:first-child, .report-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .report-table th {
+            background-color: var(--accent-light);
+            font-weight: 700;
+            color: var(--text-dark);
+            text-transform: uppercase;
+        }
+        
+        /* Rodapé da tabela para totais */
+        .report-table tfoot td {
+            border-top: 2px solid var(--primary-color);
+            border-bottom: none;
+            font-size: 1em;
+            padding: 12px 10px;
+        }
+
+
+        /* Estilos de texto para cores específicas (utilizados na tabela) */
+        .text-primary { color: var(--primary-color); font-weight: 700; }
+        .text-danger { color: var(--danger-color); font-weight: 700; }
+        .text-success { color: var(--success-color); font-weight: 700; }
+        
         
         /* --- MEDIA QUERIES PARA RESPONSIVIDADE EM CELULAR --- */
         @media (max-width: 768px) {
@@ -442,6 +515,17 @@
                 grid-template-columns: 1fr;
                 gap: 15px;
             }
+            
+            /* Relatórios no Mobile: Empilha o Gráfico e a Tabela */
+            .reports-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+            .chart-card, .data-table-card {
+                flex: none; /* Remove a proporção fixa */
+                width: 100%;
+                min-height: auto;
+            }
         }
         
         /* Regras aplicadas para telas menores que 576px (Celular Extremo) */
@@ -473,7 +557,7 @@
         <div v-else class="admin-layout">
             
             <div class="sidebar">
-                <h3>Admin Panel</h3>
+                <h3>Admin Painel</h3>
                 
                 <ul class="nav-list">
                     <li class="nav-item">
@@ -487,6 +571,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a :class="{ active: currentView === 'reports' }" @click="resetFormAndNavigate('reports')">
+                            📊 Relatórios
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a :class="{ active: currentView === 'admin-register' }" @click="resetFormAndNavigate('admin-register')">
                             👤 Cadastro Admin
                         </a>
@@ -495,7 +584,7 @@
 
                 <div class="btn-logout-container">
                      <button @click="handleLogout" class="btn btn-danger" style="width: 100%;">
-                        Sair ({{ user ? user.email : 'Admin' }})
+                        Sair ({{ user ? user.email : 'Admin' }})
                     </button>
                 </div>
             </div>
@@ -541,6 +630,70 @@
                         </div>
                         <p v-else>Nenhum produto cadastrado ou encontrado.</p>
                     </div>
+                    
+                    <div v-else-if="currentView === 'reports'">
+                        <div class="header">
+                            <h1>Relatórios de Vendas</h1>
+                        </div>
+                        
+                        <div class="product-actions-bar" style="margin-bottom: 25px; align-items: center;">
+                            <label for="startDate" style="font-weight: 500; margin-right: 5px;">De:</label>
+                            <input type="date" id="startDate" v-model="startDate" style="max-width: 200px;" @change="updateReports">
+                            
+                            <label for="endDate" style="font-weight: 500; margin-right: 5px;">Até:</label>
+                            <input type="date" id="endDate" v-model="endDate" style="max-width: 200px;" @change="updateReports">
+                            
+                            <button @click="clearDateFilters" class="btn btn-secondary" :disabled="!startDate && !endDate">Limpar Filtros</button>
+                        </div>
+                        <div class="reports-container">
+                            
+                            <div class="card chart-card">
+                                <h2>Contagem Mensal: Pedidos Enviados vs. Cancelados</h2>
+                                <div style="height: 400px; width: 100%;"> 
+                                    <chart-component 
+                                        :chart-data="monthlyOrdersData" 
+                                        chart-type="bar" 
+                                        chart-title="Contagem de Pedidos por Mês e Status">
+                                    </chart-component>
+                                </div>
+                            </div>
+                            
+                            <div class="card data-table-card">
+                                <h2>Itens Mais Vendidos (Enviados/Concluídos)</h2>
+                                <table class="report-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left;">Item</th>
+                                            <th>Vendido</th>
+                                            <th>Valor Unit.</th>
+                                            <th>Valor Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="item in topSellingItems" :key="item.name">
+                                            <td style="text-align: left;">{{ item.name }}</td>
+                                            <td class="text-primary">{{ item.quantity }}</td>
+                                            <td>{{ formatPrice(item.unitPrice) }}</td>
+                                            <td class="text-success">{{ formatPrice(item.revenue) }}</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot v-if="topSellingItems.length > 0">
+                                        <tr>
+                                            <td colspan="3" style="text-align: right; font-weight: 700; background-color: var(--accent-light);">
+                                                TOTAL GERAL VENDIDO:
+                                            </td>
+                                            <td class="text-success" style="background-color: var(--accent-light); font-size: 1.1em;">
+                                                {{ formatPrice(totalRevenue) }}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                    </table>
+                                <p v-if="topSellingItems.length === 0" style="text-align: center; margin-top: 20px; color: var(--secondary-color);">
+                                    Sem dados de vendas (Pedidos "Enviados" ou "Concluídos" necessários).
+                                </p>
+                            </div>
+                        </div>
+                        </div>
 
                     <div v-else-if="currentView === 'orders'">
                         <div class="header">
@@ -751,13 +904,120 @@
         const database = firebase.database();
         const storage = firebase.storage();
         
-        const { createApp, ref, onMounted, computed } = Vue;
+        const { createApp, ref, onMounted, computed, watch, onUnmounted } = Vue;
+
+        // ----------------------------------------------------
+        // COMPONENTE VUE PARA CHART.JS
+        // ----------------------------------------------------
+        const ChartComponent = {
+            props: {
+                chartData: Object,
+                chartType: {
+                    type: String,
+                    default: 'bar'
+                },
+                chartTitle: {
+                    type: String,
+                    default: 'Gráfico'
+                }
+            },
+            template: `
+                <div>
+                    <canvas ref="chartCanvas"></canvas>
+                    <p v-if="hasNoData" style="padding: 20px; text-align: center; color: var(--secondary-color);">
+                        Dados insuficientes para gerar o gráfico.
+                    </p>
+                </div>
+            `,
+            setup(props) {
+                const chartCanvas = ref(null);
+                let myChart = null; 
+
+                const hasNoData = computed(() => {
+                    return !props.chartData.labels || props.chartData.labels.length === 0;
+                });
+                
+                const renderChart = () => {
+                    if (!chartCanvas.value || hasNoData.value) {
+                        if (myChart) myChart.destroy();
+                        return;
+                    }
+
+                    // Destruir instância anterior
+                    if (myChart) {
+                        myChart.destroy();
+                    }
+
+                    const ctx = chartCanvas.value.getContext('2d');
+                    myChart = new Chart(ctx, {
+                        type: props.chartType, 
+                        data: props.chartData,
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false, // Permite definir altura/largura via CSS
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    title: {
+                                        display: true,
+                                        text: 'Nº de Pedidos'
+                                    },
+                                    ticks: {
+                                        // Garante que o eixo Y mostre apenas números inteiros
+                                        callback: function(value) { if (value % 1 === 0) { return value; } return null; } 
+                                    }
+                                },
+                                // Configuração para o eixo X (Gráfico de Barras Vertical)
+                                x: {
+                                    stacked: false, // Garante que as barras Enviado/Cancelado fiquem lado a lado
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: true, // EXIBE A LEGENDA
+                                    position: 'top',
+                                },
+                                title: {
+                                    display: true,
+                                    text: props.chartTitle,
+                                    font: { size: 16, weight: 'bold' }
+                                }
+                            }
+                        }
+                    });
+                };
+
+                // Observa mudanças nos dados para redesenhar
+                watch(() => props.chartData, () => {
+                    renderChart();
+                }, { deep: true });
+
+                onMounted(() => {
+                    renderChart();
+                });
+
+                onUnmounted(() => {
+                    if (myChart) {
+                        myChart.destroy();
+                    }
+                });
+
+                return {
+                    chartCanvas,
+                    hasNoData
+                };
+            }
+        };
+        // ----------------------------------------------------
+        // FIM COMPONENTE VUE PARA CHART.JS
+        // ----------------------------------------------------
+
 
         // ----------------------------------------------------
         // INICIALIZAÇÃO DO VUE 3
         // ----------------------------------------------------
 
-        createApp({
+        const app = createApp({
             setup() {
                 // --- 1. ESTADOS REATIVOS ---
                 const user = ref(null);
@@ -785,6 +1045,14 @@
                 const isOrdersLoading = ref(false); 
                 const orderFilter = ref('Todos'); 
                 
+                // Dados para Relatórios
+                const monthlyOrdersData = ref({ labels: [], datasets: [] });
+                const topSellingItems = ref([]); 
+                
+                // Filtros de Data para Relatórios (NOVOS ESTADOS)
+                const startDate = ref(''); 
+                const endDate = ref(''); 
+                
                 // Admin Register
                 const isRegistering = ref(false); 
                 const newAdmin = ref({ email: '', password: '' });
@@ -801,7 +1069,7 @@
                     });
                 });
 
-                // Propriedade computada para filtrar pedidos
+                // Propriedade computada para filtrar pedidos (na view 'orders')
                 const filteredOrders = computed(() => {
                     const filter = orderFilter.value;
                     
@@ -812,6 +1080,42 @@
                         if (filter === 'Todos') return true;
                         
                         return orderStatus === filter;
+                    });
+                });
+                
+                // Calcula o Valor Total de Vendas dos itens listados
+                const totalRevenue = computed(() => {
+                    return topSellingItems.value.reduce((sum, item) => sum + item.revenue, 0);
+                });
+                
+                // NOVO: Propriedade computada para filtrar pedidos para relatórios (por data)
+                const filteredOrdersForReport = computed(() => {
+                    let filteredList = orders.value;
+                    
+                    // Converte datas de input (YYYY-MM-DD) para objetos Date no fuso 00:00 e 23:59
+                    const start = startDate.value ? new Date(startDate.value + 'T00:00:00') : null;
+                    const end = endDate.value ? new Date(endDate.value + 'T23:59:59') : null;
+
+                    if (!start && !end) return filteredList;
+
+                    return filteredList.filter(order => {
+                        const orderDateObj = getDateObjectFromOrderString(order.date);
+                        if (!orderDateObj) return false;
+
+                        const orderTime = orderDateObj.getTime();
+                        let pass = true;
+
+                        // Filtra pela Data Inicial (De)
+                        if (start && orderTime < start.getTime()) {
+                            pass = false;
+                        }
+
+                        // Filtra pela Data Final (Até)
+                        if (end && orderTime > end.getTime()) {
+                            pass = false;
+                        }
+
+                        return pass;
                     });
                 });
 
@@ -842,24 +1146,26 @@
                     return 'R$ ' + num.toFixed(2).replace('.', ',');
                 };
 
+                const getDateObjectFromOrderString = (dateString) => {
+                    // Expected format: 'dd/mm/yyyy, hh:mm:ss'
+                    const parts = String(dateString).match(/(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})/);
+                    if (parts) {
+                        // Construct ISO format string 'YYYY-MM-DDTHH:mm:ss'
+                        const isoString = `${parts[3]}-${parts[2]}-${parts[1]}T${parts[4]}:${parts[5]}:${parts[6]}`;
+                        const date = new Date(isoString);
+                        return isNaN(date.getTime()) ? null : date;
+                    }
+                    // Fallback for standard timestamp (e.g., if dateString is already a timestamp)
+                    const fallbackDate = new Date(dateString);
+                    return isNaN(fallbackDate.getTime()) ? null : fallbackDate;
+                };
+
                 const formatDate = (timestamp) => {
                     if (!timestamp) return 'N/A';
                     
-                    // Tenta criar Date a partir de formato 'dd/mm/yyyy, hh:mm:ss' (formato salvo no Firebase)
-                    if (typeof timestamp === 'string' && timestamp.includes('/')) {
-                        const parts = timestamp.match(/(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})/);
-                        if (parts) {
-                            const dateString = `${parts[3]}-${parts[2]}-${parts[1]}T${parts[4]}:${parts[5]}:${parts[6]}`;
-                            const date = new Date(dateString);
-                            if (!isNaN(date.getTime())) {
-                                return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
-                            }
-                        }
-                    }
-
-                    // Tenta como timestamp padrão (milissegundos)
-                    const date = new Date(timestamp);
-                    if (!isNaN(date.getTime())) {
+                    const date = getDateObjectFromOrderString(timestamp);
+                    
+                    if (date) {
                         return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
                     }
                     
@@ -874,7 +1180,9 @@
                     uploadProgress.value = 0;
                     newAdmin.value = { email: '', password: '' };
                     searchTerm.value = ''; 
-                    orderFilter.value = 'Todos'; 
+                    orderFilter.value = 'Todos'; // Reinicia o filtro
+                    startDate.value = ''; // NOVO
+                    endDate.value = ''; // NOVO
                     
                     const fileInput = document.querySelector('input[type="file"]');
                     if (fileInput) fileInput.value = '';
@@ -886,8 +1194,15 @@
                     currentView.value = view;
 
                     if (view === 'admin') fetchProducts();
-                    if (view === 'orders') fetchOrders();
+                    if (view === 'orders' || view === 'reports') fetchOrders();
                 };
+                
+                // NOVO: Limpa os filtros de data
+                const clearDateFilters = () => {
+                    startDate.value = '';
+                    endDate.value = '';
+                };
+
 
                 // --- 4. MÉTODOS DE AUTENTICAÇÃO ---
 
@@ -972,18 +1287,148 @@
                                         clientUid: clientUid, 
                                         ...orderData, 
                                         total: parseFloat(orderData.total || 0),
+                                        // Garante que items é um array, tratando o caso de ser um objeto
                                         items: Array.isArray(orderData.items) ? orderData.items : (orderData.items ? Object.values(orderData.items) : []) 
                                     });
                                 }
                             }
                         }
                         orders.value = ordersList.reverse(); 
+                        
+                        // updateReports() será chamado pelo watcher de filteredOrdersForReport, 
+                        // mas chamamos aqui explicitamente no primeiro carregamento
+                        updateReports(); 
+                        
                     } catch (err) {
                         console.error("Erro ao carregar pedidos:", err);
                         setFeedback('error', 'Erro ao carregar a lista de pedidos.');
                     } finally {
                         isOrdersLoading.value = false;
                     }
+                };
+                
+                // --- MÉTODOS DE RELATÓRIOS ---
+                
+                // NOVO: Método para reprocessar relatórios
+                const updateReports = () => {
+                    // Se não houver pedidos carregados, limpa os gráficos/tabelas
+                    if (orders.value.length === 0) {
+                        monthlyOrdersData.value = { labels: [], datasets: [] };
+                        topSellingItems.value = [];
+                        return;
+                    }
+                    
+                    // Usa a lista de pedidos filtrada pela data
+                    const ordersToProcess = filteredOrdersForReport.value;
+                    
+                    processMonthlyOrders(ordersToProcess); 
+                    processTopSellingItems(ordersToProcess);
+                };
+                
+                // MÉTODOS DE GRÁFICOS (Contagem Mensal)
+                const processMonthlyOrders = (ordersList) => {
+                    // Armazena a contagem: 'YYYY-MM' -> { Enviado: count, Cancelado: count }
+                    const monthlyData = {}; 
+                    
+                    ordersList.forEach(order => {
+                        const status = order.status || 'Processando';
+                        
+                        // Só nos interessam 'Enviado' e 'Cancelado'
+                        if (status !== 'Enviado' && status !== 'Cancelado' && status !== 'Concluído') return; 
+                        
+                        const date = getDateObjectFromOrderString(order.date);
+                        
+                        if (!date) return; 
+                        
+                        // Formato 'YYYY-MM' para garantir a ordenação correta e agrupar
+                        const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                        
+                        if (!monthlyData[yearMonth]) {
+                            monthlyData[yearMonth] = { 'Enviado': 0, 'Cancelado': 0 };
+                        }
+                        
+                        // Conta 'Concluído' junto com 'Enviado' para fins de contagem de pedidos de sucesso
+                        const key = (status === 'Concluído') ? 'Enviado' : status;
+                        
+                        // Incrementa a contagem para o status específico
+                        if (key in monthlyData[yearMonth]) {
+                            monthlyData[yearMonth][key] += 1;
+                        }
+                    });
+
+                    // Converte e ordena os dados
+                    const sortedMonths = Object.keys(monthlyData).sort();
+                    
+                    // Labels do eixo X (Meses)
+                    const labels = sortedMonths.map(ym => {
+                        const [year, month] = ym.split('-');
+                        const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+                        return `${monthNames[parseInt(month) - 1]}/${year.substring(2)}`; // Ex: "Jan/25"
+                    });
+
+                    // Dados para cada barra
+                    const shippedData = sortedMonths.map(ym => monthlyData[ym]['Enviado']);
+                    const canceledData = sortedMonths.map(ym => monthlyData[ym]['Cancelado']);
+
+                    monthlyOrdersData.value = {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Pedidos Enviados/Concluídos',
+                                backgroundColor: '#007bff', // Azul
+                                data: shippedData,
+                                borderWidth: 1,
+                                borderRadius: 5,
+                            },
+                            {
+                                label: 'Pedidos Cancelados',
+                                backgroundColor: '#dc3545', // Vermelho
+                                data: canceledData,
+                                borderWidth: 1,
+                                borderRadius: 5,
+                            }
+                        ]
+                    };
+                };
+                
+                // MÉTODOS DE TABELA (Itens Mais Vendidos)
+                const processTopSellingItems = (ordersList) => {
+                    // Aggregation: { productName: { quantity: 0, revenue: 0, unitPrice: 0 } }
+                    const itemsData = {}; 
+
+                    ordersList.forEach(order => {
+                        // Só contabiliza itens de pedidos que foram 'Enviados' ou 'Concluídos'
+                        const status = order.status || 'Processando';
+                        if (status === 'Cancelado' || status === 'Processando') return; 
+                        
+                        const itemsArray = Array.isArray(order.items) ? order.items : (order.items ? Object.values(order.items) : []);
+                        
+                        itemsArray.forEach(item => {
+                            const name = item.name;
+                            const quantity = parseInt(item.quantity) || 0;
+                            const price = parseFloat(item.price) || 0;
+                            const totalItemValue = quantity * price;
+
+                            if (name) {
+                                if (!itemsData[name]) {
+                                    itemsData[name] = { 
+                                        name: name,
+                                        quantity: 0, 
+                                        revenue: 0, 
+                                        unitPrice: price 
+                                    };
+                                }
+                                itemsData[name].quantity += quantity;
+                                itemsData[name].revenue += totalItemValue;
+                            }
+                        });
+                    });
+
+                    // Converte para array e ordena pela quantidade (mais vendidos primeiro)
+                    const sortedItems = Object.values(itemsData)
+                        .sort((a, b) => b.quantity - a.quantity); 
+
+                    topSellingItems.value = sortedItems;
                 };
 
 
@@ -1129,124 +1574,130 @@
                 // --- 7. MÉTODOS DE PEDIDOS (CRUD) ---
 
            const updateOrderStatus = async (order, newStatus) => {
-    if (!order.clientUid || !order.id) {
-        setFeedback('error', 'Erro: UID do cliente ou ID do pedido não encontrado.');
-        return;
-    }
+                    if (!order.clientUid || !order.id) {
+                        setFeedback('error', 'Erro: UID do cliente ou ID do pedido não encontrado.');
+                        return;
+                    }
 
-    const confirmationMessage = `Tem certeza que deseja mudar o status do pedido #${order.id.substring(0, 8).toUpperCase()} para "${newStatus}"?`;
+                    const confirmationMessage = `Tem certeza que deseja mudar o status do pedido #${order.id.substring(0, 8).toUpperCase()} para "${newStatus}"?`;
 
-    if (confirm(confirmationMessage)) {
-        clearFeedback();
-        
-        let updateData = { status: newStatus };
-        const now = new Date().toLocaleString('pt-BR'); 
-
-        // Limpa todas as datas de status e define a nova
-        updateData.dateSent = null;
-        updateData.dateCanceled = null;
-        updateData.dateConcluded = null;
-
-        if (newStatus === 'Enviado') {
-            updateData.dateSent = now;
-        } else if (newStatus === 'Cancelado') {
-            updateData.dateCanceled = now;
-        } else if (newStatus === 'Concluído') { 
-            updateData.dateConcluded = now;
-        }
-        
-        // Garante que 'Processando' limpe todas as datas de status
-        if (newStatus === 'Processando') {
-            updateData.status = null; // Salva como nulo/vazio no DB
-        } else {
-            updateData.status = newStatus;
-        }
-
-        try {
-            const orderRef = database.ref(`pedidos/${order.clientUid}/${order.id}`);
-            await orderRef.update(updateData);
-            
-            // Atualiza o objeto local com os novos dados
-            const orderIndex = orders.value.findIndex(o => o.id === order.id);
-            if (orderIndex !== -1) {
-                // Precisa garantir que o status seja processando se o valor for nulo
-                const finalStatus = updateData.status || 'Processando';
-                orders.value[orderIndex] = { ...orders.value[orderIndex], ...updateData, status: finalStatus };
-            }
-            
-            // Adiciona um feedback de sucesso inicial (o WhatsApp pode demorar a abrir)
-            setFeedback('success', `Status do pedido #${order.id.substring(0, 8).toUpperCase()} atualizado para "${newStatus}" com sucesso!`);
-
-
-            // ----------------------------------------------------
-            // ✅ NOVA LÓGICA DE WHATSAPP MELHORADA COM EMOJIS, ITENS E AGRADECIMENTO
-            // ----------------------------------------------------
-            
-            const customerName = order.customer.name || 'Cliente';
-            // Tenta obter o WhatsApp do campo 'phone' ou 'whatsapp', tratando e limpando o número
-            const rawWhatsapp = order.customer.whatsapp || order.customer.phone || '';
-            const customerWhatsapp = rawWhatsapp.replace(/[^0-9]/g, ''); 
-            
-            const orderIdShort = order.id.substring(0, 8).toUpperCase();
-            const totalFormatted = formatPrice(order.total);
-            
-            // Cria a lista de itens, garantindo que order.items é um array
-            const itemsArray = Array.isArray(order.items) ? order.items : (order.items ? Object.values(order.items) : []);
-            const orderItemsList = itemsArray.map(item => `  - ${item.name} (x${item.quantity})`).join('\n');
-            
-            if (customerWhatsapp.length >= 8) { // Checa se tem um número válido (pelo menos 8 dígitos)
-                let messageText = '';
-                
-                if (newStatus === 'Enviado') {
-                    messageText = 
-                        `*🎉 ÓTIMA NOTÍCIA, ${customerName}! 🎉*\n\n` +
-                        `Seu pedido *#${orderIdShort}* foi *EMBALADO e ENVIADO*! 🚀\n\n` +
-                        `*Detalhes do Pedido:*\n` +
-                        `📦 Itens:\n${orderItemsList}\n` + // <-- ITENS ADICIONADOS
-                        `💰 Valor Total: ${totalFormatted}\n\n` +
-                        `🚚 Status: ENVIADO\n` +
-                        `📅 Data do Envio: ${now}\n\n` +
-                        `*Agradecemos a sua compra e preferência. Fique de olho na entrega!* 😊`;
-
-                } else if (newStatus === 'Cancelado') {
-                    messageText = 
-                        `*❌ Pedido Cancelado - ${customerName} *\n\n` +
-                        `Lamentamos informar, mas seu pedido *#${orderIdShort}* foi *CANCELADO*.\n\n` +
-                        `Detalhes:\n` +
-                        `📅 Data do Cancelamento: ${now}\n\n` +
-                        `Se foi um engano ou se precisar de ajuda para refazer a compra, por favor, responda esta mensagem. Estamos aqui para ajudar! 🙏`;
+                    if (confirm(confirmationMessage)) {
+                        clearFeedback();
                         
-              //  } else if (newStatus === 'Concluído') { 
-               //     messageText = 
-                //        `*✅ PEDIDO CONCLUÍDO! Obrigado, ${customerName}!* 🙏\n\n` +
-                 //       `Confirmamos que seu pedido *#${orderIdShort}* foi finalizado com sucesso! Esperamos que tenha gostado dos seus produtos. ✨\n\n` +
-                 //       `*Resumo:*\n` +
-                 //       `📦 Itens:\n${orderItemsList}\n` + // <-- ITENS ADICIONADOS
-                  //      `💰 Valor Total: ${totalFormatted}\n\n` +
-                  //      `*Agradecemos a sua confiança e volte sempre para mais novidades!* 😉`;
-                }
-                
-                if (messageText) {
-                    const encodedMessage = encodeURIComponent(messageText);
-                    const whatsappUrl = `https://wa.me/55${customerWhatsapp}?text=${encodedMessage}`;
-                    // Abre o WhatsApp Web/App na janela do navegador
-                    window.open(whatsappUrl, '_blank');
-                    // Feedback extra para o admin 
-                    setFeedback('success', `Status do pedido atualizado para "${newStatus}". Abrindo WhatsApp para notificar ${customerName}.`);
-                }
-            } else if (newStatus === 'Enviado' || newStatus === 'Cancelado' || newStatus === 'Concluído') {
-                // Se o status é um dos que gera notificação, mas o número é inválido
-                alert(`Pedido atualizado para "${newStatus}". O WhatsApp NÃO foi aberto, pois o número de contato do cliente é inválido ou não foi fornecido.`);
-            }
-            // ----------------------------------------------------
-            // FIM DA NOVA LÓGICA DE WHATSAPP
-            // ----------------------------------------------------
+                        let updateData = { status: newStatus };
+                        const now = new Date().toLocaleString('pt-BR'); 
+
+                        // Limpa todas as datas de status e define a nova
+                        updateData.dateSent = null;
+                        updateData.dateCanceled = null;
+                        updateData.dateConcluded = null;
+
+                        if (newStatus === 'Enviado') {
+                            updateData.dateSent = now;
+                        } else if (newStatus === 'Cancelado') {
+                            updateData.dateCanceled = now;
+                        } else if (newStatus === 'Concluído') { 
+                            updateData.dateConcluded = now;
+                        }
+                        
+                        // Garante que 'Processando' limpe todas as datas de status
+                        if (newStatus === 'Processando') {
+                            updateData.status = null; // Salva como nulo/vazio no DB
+                        } else {
+                            updateData.status = newStatus;
+                        }
+
+                        try {
+                            const orderRef = database.ref(`pedidos/${order.clientUid}/${order.id}`);
+                            await orderRef.update(updateData);
+                            
+                            // Atualiza o objeto local com os novos dados
+                            const orderIndex = orders.value.findIndex(o => o.id === order.id);
+                            if (orderIndex !== -1) {
+                                // Precisa garantir que o status seja processando se o valor for nulo
+                                const finalStatus = updateData.status || 'Processando';
+                                // Cria um novo objeto de pedido atualizado para garantir reatividade
+                                const updatedOrder = { ...orders.value[orderIndex], ...updateData, status: finalStatus }; 
+                                orders.value.splice(orderIndex, 1, updatedOrder); // Atualiza na lista reativa
+                                
+                                // Re-processa os dados para atualizar o gráfico e a tabela
+                                processMonthlyOrders(orders.value);
+                                processTopSellingItems(orders.value);
+                            }
+                            
+                            // Adiciona um feedback de sucesso inicial 
+                            setFeedback('success', `Status do pedido #${order.id.substring(0, 8).toUpperCase()} atualizado para "${newStatus}".`);
 
 
-        } catch (err) {
-            setFeedback('error', `Erro ao atualizar status para ${newStatus}.`);
-            console.error("Erro na atualização de status:", err);
-        }
+                            // ----------------------------------------------------
+                            // LÓGICA DE WHATSAPP
+                            // ----------------------------------------------------
+                            
+                            const customerName = order.customer.name || 'Cliente';
+                            // Tenta obter o WhatsApp do campo 'phone' ou 'whatsapp', tratando e limpando o número
+                            const rawWhatsapp = order.customer.whatsapp || order.customer.phone || '';
+                            const customerWhatsapp = rawWhatsapp.replace(/[^0-9]/g, ''); 
+                            
+                            const orderIdShort = order.id.substring(0, 8).toUpperCase();
+                            const totalFormatted = formatPrice(order.total);
+                            
+                            // Cria a lista de itens, garantindo que order.items é um array
+                            const itemsArray = Array.isArray(order.items) ? order.items : (order.items ? Object.values(order.items) : []);
+                            const orderItemsList = itemsArray.map(item => `  - ${item.name} (x${item.quantity})`).join('\n');
+                            
+                            if (customerWhatsapp.length >= 8) { // Checa se tem um número válido (pelo menos 8 dígitos)
+                                let messageText = '';
+                                
+                                if (newStatus === 'Enviado') {
+                                    messageText = 
+                                        `*🎉 ÓTIMA NOTÍCIA, ${customerName}! 🎉*\n\n` +
+                                        `Seu pedido *#${orderIdShort}* foi *EMBALADO e ENVIADO*! 🚀\n\n` +
+                                        `*Detalhes do Pedido:*\n` +
+                                        `📦 Itens:\n${orderItemsList}\n` + 
+                                        `💰 Valor Total: ${totalFormatted}\n\n` +
+                                        `🚚 Status: ENVIADO\n` +
+                                        `📅 Data do Envio: ${now}\n\n` +
+                                        `*Agradecemos a sua compra e preferência. Fique de olho na entrega!* 😊`;
+
+                                } else if (newStatus === 'Cancelado') {
+                                    messageText = 
+                                        `*❌ Pedido Cancelado - ${customerName} *\n\n` +
+                                        `Lamentamos informar, mas seu pedido *#${orderIdShort}* foi *CANCELADO*.\n\n` +
+                                        `Detalhes:\n` +
+                                        `📅 Data do Cancelamento: ${now}\n\n` +
+                                        `Se foi um engano ou se precisar de ajuda para refazer a compra, por favor, responda esta mensagem. Estamos aqui para ajudar! 🙏`;
+                                        
+                                } else if (newStatus === 'Concluído') { 
+                                    messageText = 
+                                        `*✅ PEDIDO CONCLUÍDO! Obrigado, ${customerName}!* 🙏\n\n` +
+                                        `Confirmamos que seu pedido *#${orderIdShort}* foi finalizado com sucesso! Esperamos que tenha gostado dos seus produtos. ✨\n\n` +
+                                        `*Resumo:*\n` +
+                                        `📦 Itens:\n${orderItemsList}\n` + 
+                                        `💰 Valor Total: ${totalFormatted}\n\n` +
+                                        `*Agradecemos a sua confiança e volte sempre para mais novidades!* 😉`;
+                                }
+                                
+                                if (messageText) {
+                                    const encodedMessage = encodeURIComponent(messageText);
+                                    const whatsappUrl = `https://wa.me/55${customerWhatsapp}?text=${encodedMessage}`;
+                                    // Abre o WhatsApp Web/App na janela do navegador
+                                    window.open(whatsappUrl, '_blank');
+                                    // Feedback extra para o admin 
+                                    setFeedback('success', `Status do pedido atualizado para "${newStatus}". Abrindo WhatsApp para notificar ${customerName}.`);
+                                }
+                            } else if (newStatus === 'Enviado' || newStatus === 'Cancelado' || newStatus === 'Concluído') {
+                                // Se o status é um dos que gera notificação, mas o número é inválido
+                                alert(`Pedido atualizado para "${newStatus}". O WhatsApp NÃO foi aberto, pois o número de contato do cliente é inválido ou não foi fornecido.`);
+                            }
+                            // ----------------------------------------------------
+                            // FIM DA LÓGICA DE WHATSAPP
+                            // ----------------------------------------------------
+
+
+                        } catch (err) {
+                            setFeedback('error', `Erro ao atualizar status para ${newStatus}.`);
+                            console.error("Erro na atualização de status:", err);
+                        }
                     }
                 };
 
@@ -1265,6 +1716,8 @@
                             
                             setFeedback('success', 'Pedido excluído permanentemente com sucesso!');
                             orders.value = orders.value.filter(o => o.id !== orderId);
+                            // Re-processa os dados para atualizar o gráfico de relatórios
+                            updateReports(); // Usa o novo método de atualização
                         } catch (err) {
                             setFeedback('error', 'Erro ao excluir pedido permanentemente.');
                             console.error("Erro na exclusão do pedido:", err);
@@ -1287,6 +1740,9 @@
                             currentView.value = 'login';
                         }
                     });
+                    
+                    // NOVO: Observa mudanças no filtro de data (que muda filteredOrdersForReport) e atualiza os relatórios
+                    watch(filteredOrdersForReport, updateReports);
                 });
 
 
@@ -1296,18 +1752,25 @@
                     globalSuccess, globalError, products, isDataLoading, isRegistering,
                     newProduct, imageFile, uploadProgress, imagePreviewUrl, isEditing,
                     orders, isOrdersLoading, newAdmin, searchTerm, filteredProducts, 
-                    orderFilter, filteredOrders, 
-
+                    orderFilter, filteredOrders, monthlyOrdersData, topSellingItems, totalRevenue, 
+                    startDate, endDate, // EXPOSTO
+                    
                     handleLogin, handleLogout, handleAdminRegister,
                     handleFileChange, startEdit, handleProductRegister,
                     handleProductUpdate, handleProductDelete, 
                     updateOrderStatus,
                     handleOrderDelete,
                     resetFormAndNavigate,
-                    formatPrice, formatDate
+                    formatPrice, formatDate,
+                    updateReports, clearDateFilters // EXPOSTO
                 };
             }
-        }).mount('#app');
+        });
+        
+        // REGISTRA O NOVO COMPONENTE GLOBALMENTE
+        app.component('chart-component', ChartComponent);
+        
+        app.mount('#app');
     </script>
 </body>
 </html>
